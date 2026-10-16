@@ -66,7 +66,7 @@ async function processRegistration() {
     // TODO: const registerBody = { ... }
     const registerBody = {username, email, password};
 
-const requestOptions = {
+    const requestOptions = {
         method: "POST",
         mode: "cors",
         cache: "no-cache",
