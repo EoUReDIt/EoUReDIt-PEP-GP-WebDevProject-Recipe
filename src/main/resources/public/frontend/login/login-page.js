@@ -21,7 +21,10 @@ const logoutButton = document.getElementById("logout-button");
  * TODO: Add click event listener to login button
  * - Call processLogin on click
  */
- loginButton.addEventListener("keydown", (event) => {if(event.key==="Enter") processLogin();});
+ loginButton.addEventListener("click", processLogin); // FIX 1: "click", not "keydown"
+
+// Optional extra: pressing Enter inside the password box also logs in
+userPasswordInput.addEventListener("keydown", (event) => { if (event.key === "Enter") processLogin(); });
 
 /**
  * TODO: Process Login Function
@@ -52,6 +55,7 @@ async function processLogin() {
 
     if(!username || !password){
       alert("Please enter both username and password");
+      return; // FIX 2: stop here, otherwise the request is still sent
     }
    
 
@@ -75,48 +79,44 @@ async function processLogin() {
 
     try {
         // TODO: Send POST request to http://localhost:8081/login using fetch with requestOptions
-        const response = await fetch('${BASE_URL}/login', requestBody);
+        // FIX 3: backticks + ${...} so BASE_URL is inserted; FIX 4: pass requestOptions (not requestBody)
+        const response = await fetch(`${BASE_URL}/login`, requestOptions);
+
+        // FIX 5: ONE if / else-if / else chain on response.status.
+        // Before, the 401 and "Unknown issue" branches were attached to `if(logoutButton)`.
 
         // TODO: If response status is 200
         // - Read the response as text
         // - Response will be a space-separated string: "token123 true"
         // - Split the string into token and isAdmin flag
         // - Store both in sessionStorage using sessionStorage.setItem()
-        if(response.status ===200){
-          const text = await response.text();
-          const [token, isAdmin] = text.split(" ");
+        if (response.status === 200) {
+            const text = await response.text();
+            const [token, isAdmin] = text.split(" ");
+            sessionStorage.setItem("auth-token", token);
+            sessionStorage.setItem("is-admin", isAdmin);
 
+            // TODO: Optionally show the logout button if applicable
+            if (logoutButton) {
+                logoutButton.style.display = "inline";
+            }
 
-          sessionStorage.setItem("auth-token", token);
-          sessionStorage.setItem("is-admin", isAdmin);
-
-        }
-
-        // TODO: Optionally show the logout button if applicable
-        if(logoutButton){
-          logoutButton.style.display = "inline";
-
-        
-
-        // TODO: Add a small delay (e.g., 500ms) using setTimeout before redirecting
-        // - Use window.location.href to redirect to the recipe page
-          setTimeout(() => {
-                  window.location.href = "../recipe/recipe-page.html";
-              }, 500);
+            // TODO: Add a small delay (e.g., 500ms) using setTimeout before redirecting
+            // - Use window.location.href to redirect to the recipe page
+            setTimeout(() => {
+                window.location.href = "../recipe/recipe-page.html";
+            }, 500);
 
         // TODO: If response status is 401
         // - Alert the user with "Incorrect login!"
-        } else if(response.status===401){
-          alert("Incorect login!");
-
-
-        } else{
-          alert("Unknown issue!");
-        }
+        } else if (response.status === 401) {
+            alert("Incorrect login!"); // FIX 6: spelling ("Incorect")
 
         // TODO: For any other status code
         // - Alert the user with a generic error like "Unknown issue!"
-
+        } else {
+            alert("Unknown issue!");
+        }
     } catch (error) {
         // TODO: Handle any network or unexpected errors
         // - Log the error and alert the user
@@ -124,4 +124,3 @@ async function processLogin() {
        alert("Could not reach the server. Is the backend running?")
     }
 }
-

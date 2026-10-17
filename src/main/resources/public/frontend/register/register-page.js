@@ -12,12 +12,13 @@ const recipeUserName = document.getElementById("username-input");
 const recipeUserEmail = document.getElementById("email-input");
 const userPasswordInput = document.getElementById("password-input");
 const repeatPasswordInput = document.getElementById("repeat-password-input");
+const registerButton = document.getElementById("register-button"); // FIX 1: this was never defined (signUpButton)
 
 
 /* 
  * TODO: Ensure the register button calls processRegistration when clicked
  */
- signUpButton.addEventListener("click", processRegistration);
+ registerButton.addEventListener("click", processRegistration);
 
 /**
  * TODO: Process Registration Function
@@ -48,6 +49,12 @@ async function processRegistration() {
      /* STEP 3 - Read and validate
      * CONCEPT: validation = a chain of early returns ("guard clauses").
      */
+
+    // FIX 2: read the VALUES from the inputs first; username/email/... were never defined
+    const username = recipeUserName.value.trim();
+    const email = recipeUserEmail.value.trim();
+    const password = userPasswordInput.value;
+    const repeatPassword = repeatPasswordInput.value;
 
     if (!username || !email || !password || !repeatPassword) {
         alert("Fill everything in");
@@ -83,9 +90,9 @@ async function processRegistration() {
     // await fetch(...)
 
         try{
-          const response = await fetch('{BASE_URL}/register', requestOptions);
+          const response = await fetch(`${BASE_URL}/register`, requestOptions);
           if (response.status===201){
-            window.location.href = "../login/login-page.html"
+            window.location.href = "../login/login-page.html";
           }else if(response.status ===409){
               alert("That username or email already exists");
           } else {
