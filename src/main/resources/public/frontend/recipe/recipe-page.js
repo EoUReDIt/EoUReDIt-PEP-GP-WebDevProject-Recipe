@@ -16,14 +16,37 @@ window.addEventListener("DOMContentLoaded", () => {
      * - Admin link and logout button
      * - Search input
     */
+    const addNameInput = document.getElementById("add-recipe-name-input");
+    const addInstructionsInput = document.getElementById("add-recipe-instructions-input");
+    const updateNameInput = document.getElementById("update-recipe-name-input");
+    const updateInstructionsInput = document.getElementById("update-recipe-instructions-input");
+    const deleteNameInput = document.getElementById("delete-recipe-name-input");
+    const recipeListContainer = document.getElementById("recipe-list");
+    const adminLink = document.getElementById("admin-link");
+    const logoutButton = document.getElementById("logout-button");
+    const searchInput = document.getElementById("search-input");
+
+    // Buttons (needed for the event handlers below)
+    const addButton = document.getElementById("add-recipe-submit-input");
+    const updateButton = document.getElementById("update-recipe-submit-input");
+    const deleteButton = document.getElementById("delete-recipe-submit-input");
+    const searchButton = document.getElementById("search-button");
 
     /*
      * TODO: Show logout button if auth-token exists in sessionStorage
      */
+    // getItem returns null when the key is missing, so a truthiness check works.
+    if (sessionStorage.getItem("auth-token")) {
+        logoutButton.style.display = "inline";
+    }
 
     /*
      * TODO: Show admin link if is-admin flag in sessionStorage is "true"
      */
+    // Stored as the STRING "true"/"false". "false" is truthy, so compare explicitly.
+    if (sessionStorage.getItem("is-admin") === "true") {
+        adminLink.style.display = "inline";
+    }
 
     /*
      * TODO: Attach event handlers
@@ -33,10 +56,24 @@ window.addEventListener("DOMContentLoaded", () => {
      * - Search button → searchRecipes()
      * - Logout button → processLogout()
      */
+    addButton.addEventListener("click", addRecipe);
+    updateButton.addEventListener("click", updateRecipe);
+    deleteButton.addEventListener("click", deleteRecipe);
+    searchButton.addEventListener("click", searchRecipes);
+    logoutButton.addEventListener("click", processLogout);
 
     /*
      * TODO: On page load, call getRecipes() to populate the list
      */
+    getRecipes();
+
+    // Helper: JSON + Bearer token headers
+    function authHeaders() {
+        return {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${sessionStorage.getItem("auth-token")}`
+        };
+    }
 
 
     /**
@@ -47,7 +84,30 @@ window.addEventListener("DOMContentLoaded", () => {
      * - Handle fetch errors and alert user
      */
     async function searchRecipes() {
-        // Implement search logic here
+        const term = searchInput.value.trim();
+
+        if (!term) {
+            await getRecipes(); // empty search = show everything
+            return;
+        }
+
+        try {
+            // encodeURIComponent makes spaces, &, ? etc. safe inside a URL
+            const response = await fetch(`${BASE_URL}/recipes?name=${encodeURIComponent(term)}`);
+
+            if (response.status === 200) {
+                recipes = await response.json();
+            } else if (response.status === 404) {
+                recipes = []; // 404 here just means "no matches"
+            } else {
+                alert("Search failed");
+                return;
+            }
+            refreshRecipeList();
+        } catch (error) {
+            console.error("Search error:", error);
+            alert("Could not reach the server");
+        }
     }
 
     /**
@@ -59,7 +119,34 @@ window.addEventListener("DOMContentLoaded", () => {
      * - On success: clear inputs, fetch latest recipes, refresh the list
      */
     async function addRecipe() {
-        // Implement add logic here
+        const name = addNameInput.value.trim();
+        const instructions = addInstructionsInput.value.trim();
+
+        if (!name || !instructions) {
+            alert("Please enter both a name and instructions");
+            return;
+        }
+
+        try {
+            const response = await fetch(`${BASE_URL}/recipes`, {
+                method: "POST",
+                headers: authHeaders(),
+                body: JSON.stringify({ name, instructions })
+            });
+
+            if (response.status === 201) {
+                addNameInput.value = "";
+                addInstructionsInput.value = "";
+                await getRecipes(); // fetches latest AND refreshes the list
+            } else if (response.status === 401) {
+                alert("Please log in to add a recipe");
+            } else {
+                alert("Could not add recipe");
+            }
+        } catch (error) {
+            console.error("Add recipe error:", error);
+            alert("Could not reach the server");
+        }
     }
 
     /**
@@ -71,7 +158,43 @@ window.addEventListener("DOMContentLoaded", () => {
      * - On success: clear inputs, fetch latest recipes, refresh the list
      */
     async function updateRecipe() {
-        // Implement update logic here
+        const name = updateNameInput.value.trim();
+        const instructions = updateInstructionsInput.value.trim();
+
+        if (!name || !instructions) {
+            alert("Please enter both a name and new instructions");
+            return;
+        }
+
+        try {
+            await getRecipes(); // make sure our array is current before searching it
+
+            // The user types a NAME but PUT needs an ID, so find the recipe first.
+            const match = recipes.find((recipe) => recipe.name.toLowerCase() === name.toLowerCase());
+            if (!match) {
+                alert("Recipe not found");
+                return;
+            }
+
+            const response = await fetch(`${BASE_URL}/recipes/${match.id}`, {
+                method: "PUT",
+                headers: authHeaders(),
+                body: JSON.stringify({ name: match.name, instructions })
+            });
+
+            if (response.status === 200) {
+                updateNameInput.value = "";
+                updateInstructionsInput.value = "";
+                await getRecipes();
+            } else if (response.status === 404) {
+                alert("Recipe not found");
+            } else {
+                alert("Could not update recipe");
+            }
+        } catch (error) {
+            console.error("Update recipe error:", error);
+            alert("Could not reach the server");
+        }
     }
 
     /**
@@ -82,7 +205,40 @@ window.addEventListener("DOMContentLoaded", () => {
      * - On success: refresh the list
      */
     async function deleteRecipe() {
-        // Implement delete logic here
+        const name = deleteNameInput.value.trim();
+
+        if (!name) {
+            alert("Please enter a recipe name");
+            return;
+        }
+
+        const match = recipes.find((recipe) => recipe.name.toLowerCase() === name.toLowerCase());
+        if (!match) {
+            alert("Recipe not found");
+            return;
+        }
+
+        try {
+            const response = await fetch(`${BASE_URL}/recipes/${match.id}`, {
+                method: "DELETE",
+                headers: authHeaders()
+            });
+
+            // The backend only lets an ADMIN delete recipes (401 otherwise).
+            if (response.status === 200) {
+                deleteNameInput.value = "";
+                await getRecipes();
+            } else if (response.status === 401) {
+                alert("Only an admin can delete recipes");
+            } else if (response.status === 404) {
+                alert("Recipe not found");
+            } else {
+                alert("Could not delete recipe");
+            }
+        } catch (error) {
+            console.error("Delete recipe error:", error);
+            alert("Could not reach the server");
+        }
     }
 
     /**
@@ -92,7 +248,22 @@ window.addEventListener("DOMContentLoaded", () => {
      * - Call refreshRecipeList() to display
      */
     async function getRecipes() {
-        // Implement get logic here
+        try {
+            const response = await fetch(`${BASE_URL}/recipes`);
+
+            if (response.status === 200) {
+                recipes = await response.json();
+            } else if (response.status === 404) {
+                recipes = []; // 404 = the table is empty
+            } else {
+                alert("Could not load recipes");
+                return;
+            }
+            refreshRecipeList();
+        } catch (error) {
+            console.error("Get recipes error:", error);
+            alert("Could not reach the server");
+        }
     }
 
     /**
@@ -102,7 +273,13 @@ window.addEventListener("DOMContentLoaded", () => {
      * - Append to list container
      */
     function refreshRecipeList() {
-        // Implement refresh logic here
+        recipeListContainer.innerHTML = "";
+
+        recipes.forEach((recipe) => {
+            const li = document.createElement("li");
+            li.textContent = `${recipe.name}: ${recipe.instructions}`;
+            recipeListContainer.appendChild(li);
+        });
     }
 
     /**
@@ -113,7 +290,22 @@ window.addEventListener("DOMContentLoaded", () => {
      * - On failure: alert the user
      */
     async function processLogout() {
-        // Implement logout logic here
+        try {
+            const response = await fetch(`${BASE_URL}/logout`, {
+                method: "POST",
+                headers: authHeaders()
+            });
+
+            if (response.status === 200) {
+                sessionStorage.clear(); // removes auth-token and is-admin
+                window.location.href = "../login/login-page.html";
+            } else {
+                alert("Logout failed");
+            }
+        } catch (error) {
+            console.error("Logout error:", error);
+            alert("Could not reach the server");
+        }
     }
 
 });
